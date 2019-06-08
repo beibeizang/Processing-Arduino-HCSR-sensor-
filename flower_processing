@@ -1,0 +1,257 @@
+import processing.video.*;
+Movie myMovie;
+
+ArrayList points = new ArrayList();
+import processing.sound.*;
+
+SoundFile sample;
+Amplitude rms;
+float smoothingFactor = 0.5;
+float sum;
+
+import processing.serial.*;
+
+Serial serial;
+String inString;
+int f = 20;
+String distanceStr;
+
+
+PImage sprite;  
+
+float distance;
+
+int mWidth = 600;
+int mHeight = 480;
+int mWidthHalf = mWidth / 2;
+int mHeightHalf = mHeight / 2;
+
+float mMaxDistance = mWidth / 6.0f;
+
+boolean drawing = true;
+float radius;
+PGraphics img;
+PGraphics buffer;
+final float pixelSize = width / 5;
+float amplitude = 100;
+float fillGap = 15;
+PImage bg;
+
+void setup() {
+  size(1280,800);
+  //fullScreen();
+   sample = new SoundFile(this, "moon.aiff");
+  sample.loop();
+   rms = new Amplitude(this);
+  rms.input(sample);
+  
+  printArray(Serial.list());
+ 
+  String portName = Serial.list()[1];
+  
+  serial = new Serial(this, portName, 9600);
+  serial.bufferUntil('\n');
+  bg = loadImage("007.tif");
+  
+  
+    background(bg);
+ img = createGraphics(1920, 1080);
+ noStroke();
+  img.beginDraw();
+  for (float x = 0; x < width; x += random(pixelSize * 15)) {
+    for (float y = 0; y < height; y += random(pixelSize * 15)) {
+    final color randomColor = getRandomColorWithAlpha(255);
+    img.fill(randomColor);
+    img.rect(x, y, (pixelSize * 16), (pixelSize * 16));
+   }
+ }
+  img.endDraw();
+  //image(img, 0, 0, width, height);
+  //----------
+  buffer = createGraphics(img.width, img.height);
+  //buffer.smooth(8);
+  buffer.beginDraw();
+  //buffer.noStroke();
+  //buffer.background(0);
+  buffer.image(img, 0, 0);
+  //img = buffer.get();
+ buffer.endDraw();
+  //----------
+  processImage();
+  
+ 
+  
+}
+
+private color getRandomColorWithAlpha(final int alpha) {
+  return color((int) random(100,250) + 0,(int) random(50,200) + 0,(int) random(30,150) + 0,alpha);
+
+}
+
+  
+  
+  
+
+
+void draw() {
+  //image(myMovie,0,0);
+  //size(1280,800);  
+  sum += (rms.analyze() - sum) * smoothingFactor;
+  println(sum);
+// Is the mouse pressed? Well then add some new points, sucka!
+  if (drawing == true) {
+    points.add(new Point(new PVector(map(distance,30,200,100,width-300)+random(-10, 10), map(sum,0.2,0.95,height/2-150,height/2+150)+random(-10, 10)), new PVector(0, 0), 200));
+  }
+  // Loop through the points.
+  for (int i = 0; i < points.size(); i++) {
+    Point localPoint = (Point) points.get(i);
+    if (localPoint.isDead) points.remove(i);
+    // Change this 10 to something smaller or larger to change the drawing speed.
+    for (int j = 0; j < 1; j++) {
+      localPoint.update();
+      localPoint.draw();
+    }
+  }  
+}
+void serialEvent(Serial p){
+  String distanceStr = p.readString();
+  print(distanceStr);
+  distance = float(distanceStr);
+  println(distance);
+}
+
+
+
+
+void keyPressed(){
+
+
+if (key=='a' || key=='A') 
+//image(img, 0, 0, width, height);
+background(bg);
+}
+
+void mousePressed() {
+  //void radius(){
+  //drawing = true;
+  if (random(1)<0.193) {
+    // Less common. Draw a fat stroke.
+   radius = random(15, 30);
+ } 
+ else {
+    // More common. Draw a thin stroke.
+ radius = random(15, 30);
+ }
+  //filter(BLUR, 1);
+}
+
+//void mouseReleased() {
+ // drawing = false;
+//}
+
+class Point {
+
+  PVector pos, vel, noiseVec;
+  float noiseFloat, lifeTime, age;
+  boolean isDead;
+  int kuler;
+
+  public Point(PVector _pos, PVector _vel, float _lifeTime) {
+    pos = _pos;
+    vel = _vel;
+    lifeTime = _lifeTime;
+    age = 0;
+    isDead = false;
+    noiseVec = new PVector();
+    // Grab the color at the point's first x and y and keep the color.
+    //kuler = buffer.get((int) pos.x, (int) pos.y);
+    kuler = img.get((int) pos.x, (int) pos.y);
+  }
+
+  void update() {
+    if (1.0-(age/lifeTime) <= 0 || pos.x < 0 || pos.x > width || pos.y < 0 || pos.y > height) {
+      isDead = true;
+      return;
+    }
+    noiseFloat = noise(pos.x * 0.001, pos.y * 0.001, frameCount * 0.001);
+    // TO DO: Figure out how these two lines work.
+    noiseVec.x = cos(((noiseFloat) * TWO_PI) * 10);
+    noiseVec.y = sin(((noiseFloat) * TWO_PI) * 10);
+    vel.add(noiseVec);
+    vel.div(2);
+    pos.add(vel);
+    age++;
+  }
+
+  void draw() {   
+    
+    float r;
+    // Scale up! The "beginning tail" of the stroke.
+    if (age < lifeTime/2) {
+      fill(red(kuler), green(kuler), blue(kuler), map(age, 0, lifeTime/2, 50,100 ));
+      r = map(age, 0, lifeTime/2, 0, radius);
+    } 
+    // Scale down! The "end tail" of the stroke.
+    else {
+      fill(red(kuler), green(kuler), blue(kuler), map(age, lifeTime/2, lifeTime, 100, 0));
+      r = map(age, lifeTime/2, lifeTime, radius, 0);
+    }
+    // Give it a stroke to kinda build a shadow.
+    strokeWeight(r);
+    stroke(0, 1);
+    ellipse(pos.x, pos.y, r, r);
+  }
+}
+//----------
+
+//---------
+void processImage() {
+  //buffer.beginDraw();
+  //buffer.endDraw();
+  //image(buffer, 0, 0, width, height);
+  //buffer.blend(img, 0, 0, img.width, img.height, 0, 0, buffer.width, buffer.height, MULTIPLY);
+  //img = buffer.get();
+  //=============================      
+//img.loadPixels();
+//int c = img.pixels[ y*width+x];
+img.loadPixels();
+  for (int i=0; i<img.pixels.length; i++) {
+    float r = img.pixels[i] >> 16 & 0xFF;
+    float g = img.pixels[i] >> 8 & 0xFF;
+    float b = img.pixels[i] & 0xFF;
+    
+    r /= 255.0;
+    g /= 255.0;
+    b /= 255.0;
+    
+    r = (((r - 0.5) * 100) + 0.5) * 255.0;
+    g = (((g - 0.5) * 100) + 0.5) * 255.0;
+    b = (((b - 0.5) * 100) + 0.5) * 255.0;
+    
+    r = r > 255 ? 255 : r;
+    r = r < 0 ? 0 : r;
+    
+    g = g > 255 ? 255 : g;
+    g = g < 0 ? 0 : g;
+    
+    b = b > 255 ? 255 : b;
+    b = b < 0 ? 0 : b;
+    
+    img.pixels[i] = color(r, g, b);
+    
+  }
+  
+  img.updatePixels();
+  //return img;  
+//===============================*/
+}
+//-----------
+//===========SaveImage
+import java.util.Calendar;
+void keyReleased() {
+  if (key=='s' || key=='S') saveFrame(timestamp()+".png"); 
+println("Saved ","timestamp()",".png ");}
+  String timestamp() {
+  return String.format("%1$ty%1$tm%1$td_%1$tH%1$tM%1$tS", Calendar.getInstance());
+}
+//==============  
